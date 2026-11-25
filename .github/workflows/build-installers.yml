@@ -41,9 +41,9 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK packages
         run: |
-          SDKMANAGER=
-          yes | "" --licenses >/dev/null
-          "" "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm ci
