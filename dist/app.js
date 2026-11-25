@@ -26,6 +26,7 @@
     pointerEnabled: true,
     quality: 'original',
     fps: 30,
+    remoteMobile: false,
     webrtcActive: false,
     webrtcRtt: null,
     usingTurn: false,
@@ -59,6 +60,10 @@
     pointerHideTimer: null,
     chatTotal: 0,
   };
+
+  function isMobileDevice() {
+    return Boolean(navigator.userAgentData?.mobile) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
 
   function safeName(value, fallback) {
     const clean = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24);
@@ -191,9 +196,10 @@
         state.lastStatsBytes = totalBytes;
         state.lastStatsAt = now;
         $('mediaStats').textContent = `${Math.round(fps)} fps · ${Math.round(kbps)} KB/s`;
-        $('mediaBadgeText').textContent = `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${qualityLabels[state.quality]} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`;
+        const mediaQuality = state.remoteMobile ? '安卓兼容' : qualityLabels[state.quality];
+        $('mediaBadgeText').textContent = `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${mediaQuality} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`;
         $('mediaShell').dataset.transport = state.usingTurn ? 'turn' : 'webrtc';
-        $('activePeerDetail').textContent = `${qualityLabels[state.quality]} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps`;
+        $('activePeerDetail').textContent = `${mediaQuality} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps`;
         return;
       } catch {}
     }
@@ -294,15 +300,16 @@
     $('mediaShell').dataset.transport = state.webrtcActive ? (state.usingTurn ? 'turn' : 'webrtc') : 'relay';
 
     if (active) {
+      const mediaQuality = state.remoteMobile ? '安卓兼容' : qualityLabels[state.quality];
       $('activePeerName').textContent = state.peerName || (state.mode === 'host' ? '协助者' : '被协助者');
       $('peerAvatar').textContent = (state.peerName || '协').slice(0, 1);
       $('activePeerDetail').textContent = state.mode === 'host'
-        ? (state.webrtcActive ? `${qualityLabels[state.quality]} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps` : state.captureStream ? '兼容中转 · 省流模式' : '等待开始共享')
-        : (state.webrtcActive ? `${qualityLabels[state.quality]} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps` : state.hasFrame ? '兼容中转接收中' : '等待对方共享');
+        ? (state.webrtcActive ? `${mediaQuality} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps` : state.captureStream ? '兼容中转 · 省流模式' : '等待开始共享')
+        : (state.webrtcActive ? `${mediaQuality} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps` : state.hasFrame ? '兼容中转接收中' : '等待对方共享');
       $('mediaBadgeText').textContent = state.captureWarningShown
         ? '检测到全黑画面 · 请重新选择窗口'
         : state.webrtcActive
-          ? `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${qualityLabels[state.quality]} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`
+          ? `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${mediaQuality} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`
           : state.mode === 'host'
             ? (state.captureStream ? '兼容中转 · 正在共享' : '已连接 · 等待你开始共享')
             : (state.hasFrame ? '正在接收共享画面' : '已连接 · 等待对方共享');
@@ -433,6 +440,7 @@
 
   async function connectRelay() {
     state.intentionalClose = false;
+    state.remoteMobile = false;
     state.phase = 'connecting';
     const binding = bindingForRole(state.mode);
     $('displayCode').textContent = binding ? '已绑定设备' : formatCode(state.room);
@@ -577,6 +585,7 @@
         startTimers();
         render();
         if (state.mode === 'controller') {
+          sendJson({ type: 'media-settings', quality: state.quality, fps: state.fps, mobile: isMobileDevice() });
           ensureWebRTC();
           startFrameLoop();
         }
@@ -619,10 +628,16 @@
         break;
       case 'media-settings':
         if (state.mode === 'host' && qualities[message.quality] && [15, 24, 30, 60].includes(Number(message.fps))) {
+          const mobileChanged = state.remoteMobile !== Boolean(message.mobile);
           state.quality = message.quality;
           state.fps = Number(message.fps);
+          state.remoteMobile = Boolean(message.mobile);
           applyQuality(state.quality);
           applyFps(state.fps);
+          if (mobileChanged && state.peerConnection && state.captureStream) {
+            closeWebRTC();
+            setupWebRTC(state.captureStream);
+          }
           render();
         }
         break;
@@ -873,8 +888,8 @@
     toast('WebRTC 原画直连已建立', 'success');
   }
 
-  function fallbackFromWebRTC() {
-    if (!state.peerConnection || state.webrtcActive) return;
+  function fallbackFromWebRTC(force = false) {
+    if (!state.peerConnection || (!force && state.webrtcActive)) return;
     closeWebRTC();
     if (state.mode === 'host' && state.captureStream) startCaptureLoop();
     if (state.mode === 'controller' && state.approved) startFrameLoop();
@@ -924,16 +939,33 @@
         const video = $('remoteVideo');
         video.srcObject = event.streams[0] || new MediaStream([event.track]);
         video.hidden = false;
-        video.play().then(markWebRTCConnected).catch(() => fallbackFromWebRTC());
+        if (isMobileDevice()) {
+          event.track.onmute = () => {
+            setTimeout(() => {
+              if (event.track.muted && state.webrtcActive) fallbackFromWebRTC(true);
+            }, 2500);
+          };
+          event.track.onended = () => fallbackFromWebRTC(true);
+        }
+        video.play().then(markWebRTCConnected).catch(() => fallbackFromWebRTC(true));
       };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') markWebRTCConnected();
-        else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) fallbackFromWebRTC();
+        else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) fallbackFromWebRTC(true);
       };
       return pc;
     })();
     try { return await state.webrtcSetupPromise; }
     finally { state.webrtcSetupPromise = null; }
+  }
+
+  function preferAndroidVP8(pc) {
+    const transceiver = pc.getTransceivers().find((item) => item.sender.track?.kind === 'video' || item.receiver.track?.kind === 'video');
+    if (!transceiver?.setCodecPreferences || typeof RTCRtpSender === 'undefined') return;
+    const codecs = RTCRtpSender.getCapabilities('video')?.codecs?.filter((codec) => codec.mimeType.toLowerCase() === 'video/vp8') || [];
+    if (codecs.length) {
+      try { transceiver.setCodecPreferences(codecs); } catch {}
+    }
   }
 
   async function setupWebRTC(stream) {
@@ -957,6 +989,7 @@
       else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) fallbackFromWebRTC();
     };
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    if (state.remoteMobile) preferAndroidVP8(pc);
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -1014,9 +1047,18 @@
       const parameters = sender.getParameters();
       if (!parameters.encodings?.length) parameters.encodings = [{}];
       const profile = qualities[state.quality];
-      parameters.encodings[0].maxBitrate = profile.bitrate;
-      parameters.encodings[0].scaleResolutionDownBy = profile.scale;
-      parameters.encodings[0].maxFramerate = state.fps;
+      let scale = profile.scale;
+      let bitrate = profile.bitrate;
+      let fps = state.fps;
+      if (state.remoteMobile) {
+        const settings = sender.track.getSettings();
+        scale = Math.max(scale, Math.ceil((settings.width || 1920) / 1280), Math.ceil((settings.height || 1080) / 720));
+        bitrate = Math.min(bitrate, 4_000_000);
+        fps = Math.min(fps, 30);
+      }
+      parameters.encodings[0].maxBitrate = bitrate;
+      parameters.encodings[0].scaleResolutionDownBy = scale;
+      parameters.encodings[0].maxFramerate = fps;
       sender.setParameters(parameters).catch(() => {});
     } catch {}
   }
@@ -1328,7 +1370,7 @@
   function sendMediaSettings() {
     state.quality = $('qualitySelect').value;
     state.fps = Number($('fpsSelect').value);
-    sendJson({ type: 'media-settings', quality: state.quality, fps: state.fps });
+    sendJson({ type: 'media-settings', quality: state.quality, fps: state.fps, mobile: isMobileDevice() });
     render();
   }
   $('qualitySelect').addEventListener('change', sendMediaSettings);
