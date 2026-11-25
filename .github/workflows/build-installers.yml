@@ -36,10 +36,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER=
+          yes | "" --licenses >/dev/null
+          "" "platforms;android-36" "build-tools;36.0.0"
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm ci
