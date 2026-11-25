@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -58,3 +61,25 @@ jobs:
           name: lianqiao-android
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -exec cp {} release-assets/ \;
+          windows_file=$(find release-assets -maxdepth 1 -name '*.exe' | head -n 1)
+          android_file=$(find release-assets -maxdepth 1 -name '*.apk' | head -n 1)
+          test -n "$windows_file"
+          test -n "$android_file"
+          mv "$windows_file" release-assets/lianqiao-windows-setup.exe
+          mv "$android_file" release-assets/lianqiao-android.apk
+          gh release view v1.0.0 >/dev/null 2>&1 || gh release create v1.0.0 --title "连桥 v1.0.0" --notes "Windows 桌面端与 Android 移动端安装包"
+          gh release upload v1.0.0 release-assets/lianqiao-windows-setup.exe release-assets/lianqiao-android.apk --clobber
