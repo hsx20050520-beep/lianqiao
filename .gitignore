@@ -1,0 +1,15 @@
+node_modules/
+desktop/node_modules/
+mobile/node_modules/
+desktop/release/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/app/src/main/assets/public/
+mobile/android/app/src/main/assets/capacitor.config.json
+dev/
+functions-diagnostic/
+*.qoder.site
+*.log
+.DS_Store

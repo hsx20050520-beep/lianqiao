@@ -1,0 +1,20 @@
+[
+  {
+    "table": "devices",
+    "principal": "anonymous",
+    "actions": ["select", "insert", "update", "delete"],
+    "template": "public"
+  },
+  {
+    "table": "device_bindings",
+    "principal": "anonymous",
+    "actions": ["select", "insert", "update", "delete"],
+    "template": "public"
+  },
+  {
+    "table": "device_pair_codes",
+    "principal": "anonymous",
+    "actions": ["select", "insert", "update", "delete"],
+    "template": "public"
+  }
+]

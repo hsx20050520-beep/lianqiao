@@ -1,0 +1,12 @@
+{
+  "appId": "app.lianqiao.mobile",
+  "appName": "连桥",
+  "webDir": "../dist",
+  "server": {
+    "url": "https://lianqiao-assist-2xoqymkdrbe.qoder.zone",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

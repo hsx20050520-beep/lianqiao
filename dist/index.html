@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e13" />
+  <meta name="description" content="连桥是一个无需安装、跨网络的网页远程协助工具。通过配对码和对方确认，共享屏幕、远程指针并实时沟通。" />
+  <title>连桥 · 跨网络远程协助</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%230a0e13'/%3E%3Cpath d='M14 25h14l5 7 5-7h12M14 39h14l5-7 5 7h12' fill='none' stroke='%23c5f277' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.4c0 4.5 3 7.7 7.5 9.6 4.5-1.9 7.5-5.1 7.5-9.6V6L12 3Z"/><path d="m8.7 12 2.1 2.1 4.5-4.5"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M11 18h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H5l-3 2 1.6-5A8 8 0 1 1 21 12Z"/><path d="M8 10h8M8 14h5"/></symbol>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path d="m5 3 14 9-6.2 1.2L9 19 5 3Z"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0M9 17a4 4 0 0 1 6 0"/><circle cx="12" cy="21" r="1"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  </svg>
+
+  <div class="page-grid" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="连桥首页">
+      <span class="brand-mark"><svg><use href="#i-link"></use></svg></span>
+      <span class="brand-name">连桥</span>
+      <span class="beta-badge">WEB BETA</span>
+    </a>
+    <div class="topbar-actions">
+      <span class="relay-pill" id="relayPill"><span class="status-dot"></span><span id="relayLabel">中转服务待连接</span></span>
+      <button class="icon-button" id="helpButton" type="button" aria-label="查看使用说明"><svg><use href="#i-info"></use></svg></button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="workspace-heading">
+      <div>
+        <p class="eyebrow"><span></span> 跨网络远程协助</p>
+        <h1>让帮助，<em>即刻抵达。</em></h1>
+        <p class="heading-copy">不在同一网络也没关系。创建一个会话，把配对码交给信任的人。</p>
+      </div>
+      <div class="role-switch" role="tablist" aria-label="选择使用方式">
+        <button class="role-button active" id="hostTab" role="tab" aria-selected="true" data-mode="host" type="button">
+          <svg><use href="#i-monitor"></use></svg><span>我要被协助</span>
+        </button>
+        <button class="role-button" id="controllerTab" role="tab" aria-selected="false" data-mode="controller" type="button">
+          <svg><use href="#i-pointer"></use></svg><span>我要协助别人</span>
+        </button>
+      </div>
+    </section>
+
+    <div class="work-grid">
+      <section class="stage-card" aria-label="远程协助工作区">
+        <div class="stage-topline">
+          <div class="stage-title"><span class="status-dot" id="stageDot"></span><span id="stageTitle">准备开始</span></div>
+          <div class="stage-actions">
+            <button class="diagnostic-button" id="diagnosticShareButton" type="button" hidden><svg><use href="#i-monitor"></use></svg><span>选择共享源</span></button>
+            <button class="diagnostic-button accent" id="diagnosticButton" type="button" hidden><svg><use href="#i-eye"></use></svg><span>测试画面</span></button>
+            <span class="stage-meta" id="stageMeta">端到端配对 · 显式授权</span>
+          </div>
+        </div>
+
+        <div class="stage-content" id="stageContent">
+          <div class="view is-visible" id="hostIdleView">
+            <div class="idle-illustration host-illustration" aria-hidden="true">
+              <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+              <div class="device-card"><div class="device-bar"><i></i><i></i><i></i></div><div class="device-screen"><span class="signal-line"></span><span class="signal-line short"></span><span class="signal-block"></span></div><div class="device-stand"></div></div>
+              <span class="floating-chip chip-secure"><svg><use href="#i-shield"></use></svg>对方确认后共享</span>
+              <span class="floating-chip chip-network"><svg><use href="#i-wifi"></use></svg>跨网络连接</span>
+            </div>
+            <div class="idle-copy"><p class="section-kicker">被协助端</p><h2>把你的屏幕，交给信任的人。</h2><p>创建会话后，你可以决定何时共享、是否允许远程指针，并随时结束。</p></div>
+            <form class="start-form" id="hostForm">
+              <label class="field-label" for="hostName">你的称呼 <span>可选</span></label>
+              <div class="input-action-row"><input id="hostName" class="text-input" maxlength="24" autocomplete="nickname" placeholder="例如：小林" /><button class="primary-button" type="submit"><span id="hostSubmitText">创建协助会话</span><svg><use href="#i-arrow"></use></svg></button></div>
+            </form>
+            <div class="compatibility-note"><svg><use href="#i-monitor"></use></svg><span>建议使用电脑版 Chrome 或 Edge 发起屏幕共享</span></div>
+          </div>
+
+          <div class="view" id="controllerIdleView">
+            <div class="idle-illustration controller-illustration" aria-hidden="true">
+              <div class="code-visual"><span>L</span><span>I</span><span>N</span><span>K</span><i>—</i><span>2</span><span>0</span><span>2</span><span>6</span></div>
+              <div class="connect-path"><span class="path-node"><svg><use href="#i-phone"></use></svg></span><span class="path-line"><i></i></span><span class="path-node center"><svg><use href="#i-link"></use></svg></span><span class="path-line"><i></i></span><span class="path-node"><svg><use href="#i-monitor"></use></svg></span></div>
+            </div>
+            <div class="idle-copy"><p class="section-kicker">协助端</p><h2>输入配对码，来到对方身边。</h2><p>无需账号。连接后仍需等待对方确认，才能看到共享画面。</p></div>
+            <form class="start-form" id="controllerForm">
+              <div id="joinCodeField"><label class="field-label" for="joinCode">8 位配对码</label>
+              <input id="joinCode" class="code-input" inputmode="text" autocomplete="one-time-code" maxlength="9" spellcheck="false" placeholder="XXXX-XXXX" aria-describedby="codeHint" /></div>
+              <div class="form-bottom-row"><label class="name-field" for="controllerName"><span>你的称呼</span><input id="controllerName" class="text-input" maxlength="24" autocomplete="nickname" placeholder="例如：阿哲" /></label><button class="primary-button" type="submit"><span id="controllerSubmitText">连接会话</span><svg><use href="#i-arrow"></use></svg></button></div>
+              <p class="field-hint" id="codeHint">配对码由被协助端生成，仅在本次会话有效。</p>
+            </form>
+          </div>
+
+          <div class="view compact-view" id="waitingView">
+            <div class="waiting-radar" aria-hidden="true"><span></span><span></span><span></span><svg><use href="#i-link"></use></svg></div>
+            <p class="section-kicker" id="waitingKicker">会话已创建</p>
+            <h2 id="waitingTitle">等待协助者加入</h2>
+            <p class="waiting-copy" id="waitingCopy">把配对码或邀请链接发给信任的人。</p>
+            <div class="pair-code-card"><span id="displayCode">XXXX-XXXX</span><button class="icon-button" id="copyCodeButton" type="button" aria-label="复制配对码"><svg><use href="#i-copy"></use></svg></button></div>
+            <button class="secondary-button" id="copyLinkButton" type="button"><svg><use href="#i-copy"></use></svg>复制邀请链接</button>
+            <button class="text-button danger-text" id="cancelWaitingButton" type="button">取消会话</button>
+          </div>
+
+          <div class="view compact-view" id="approvalView">
+            <div class="approval-icon"><svg><use href="#i-shield"></use></svg></div>
+            <p class="section-kicker">有人请求加入</p>
+            <h2><span id="peerName">协助者</span> 想连接你的会话</h2>
+            <p class="waiting-copy">确认你认识对方后继续。同意前，不会传输任何画面。</p>
+            <div class="approval-actions"><button class="secondary-button" id="rejectButton" type="button"><svg><use href="#i-x"></use></svg>拒绝</button><button class="primary-button" id="approveButton" type="button"><svg><use href="#i-check"></use></svg>同意并连接</button></div>
+          </div>
+
+          <div class="view active-view" id="activeView">
+            <div class="media-shell" id="mediaShell">
+              <video id="hostVideo" class="media-element" autoplay muted playsinline hidden></video>
+              <canvas id="hostCanvas" class="media-element" hidden></canvas>
+              <video id="remoteVideo" class="media-element" autoplay muted playsinline hidden></video>
+              <canvas id="remoteCanvas" class="media-element" hidden></canvas>
+              <div class="media-placeholder" id="mediaPlaceholder"><svg><use href="#i-monitor"></use></svg><span>共享尚未开始</span><div class="placeholder-actions"><button class="primary-button start-share-button" id="startSharingButton" type="button"><svg><use href="#i-monitor"></use></svg>开始共享</button><button class="secondary-button test-pattern-button" id="testPatternButton" type="button">发送测试画面</button></div></div>
+              <div class="media-top-badge"><span class="status-dot live"></span><span id="mediaBadgeText">等待共享画面</span></div>
+              <div class="media-stats" id="mediaStats">0 fps · 0 KB/s</div>
+              <div class="remote-pointer" id="remotePointer" hidden><svg><use href="#i-pointer"></use></svg><span>协助者</span></div>
+              <div class="controller-toolbar" id="controllerToolbar" hidden>
+                <button class="tool-button active" id="pointerButton" type="button" aria-pressed="true"><svg><use href="#i-pointer"></use></svg><span>指针</span></button>
+                <button class="tool-button" id="fullscreenButton" type="button"><svg><use href="#i-fullscreen"></use></svg><span>全屏</span></button>
+                <label class="quality-select"><svg><use href="#i-sliders"></use></svg><select id="qualitySelect" aria-label="画面质量"><option value="original">原画</option><option value="high">高清</option><option value="balanced">均衡</option><option value="low">省流</option></select></label>
+                <label class="quality-select"><svg><use href="#i-refresh"></use></svg><select id="fpsSelect" aria-label="画面帧率"><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option></select></label>
+                <button class="tool-button danger-tool" id="disconnectButton" type="button"><svg><use href="#i-stop"></use></svg><span>结束</span></button>
+              </div>
+              <button class="stop-sharing-button" id="stopSharingButton" type="button" hidden><svg><use href="#i-stop"></use></svg>结束共享</button>
+            </div>
+            <div class="active-bottom-bar"><div class="active-peer"><span class="peer-avatar" id="peerAvatar">协</span><div><strong id="activePeerName">协助者</strong><span id="activePeerDetail">已连接</span></div></div><div class="active-time"><span>会话时长</span><strong id="sessionTimer">00:00</strong></div></div>
+          </div>
+        </div>
+
+        <div class="stage-footer"><svg><use href="#i-lock"></use></svg><span id="stageFooterText">连接过程使用加密中转，画面只在双方确认后传输。</span><span class="footer-shortcut" id="footerShortcut">ESC 退出全屏</span></div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel session-panel">
+          <div class="panel-heading"><h2>会话状态</h2><div class="panel-heading-actions"><button class="binding-button" id="openBindingButton" type="button"><svg><use href="#i-link"></use></svg>设备绑定</button><span class="mini-badge" id="sessionBadge">未连接</span></div></div>
+          <div class="session-route" aria-label="连接路径"><div class="route-device"><svg><use href="#i-monitor"></use></svg><span>你的设备</span></div><div class="route-line"><i></i><svg><use href="#i-chevron"></use></svg></div><div class="route-relay"><svg><use href="#i-link"></use></svg><span>Qoder 中转</span></div><div class="route-line"><i></i><svg><use href="#i-chevron"></use></svg></div><div class="route-device"><svg><use href="#i-phone"></use></svg><span>对方设备</span></div></div>
+          <dl class="session-details"><div><dt>连接方式</dt><dd>跨网络 · HTTPS 加密</dd></div><div><dt>当前权限</dt><dd id="permissionSummary">等待授权</dd></div><div><dt>网络延迟</dt><dd id="latencyValue">—</dd></div></dl>
+        </section>
+
+        <section class="panel permission-panel">
+          <div class="panel-heading"><h2>共享权限</h2><svg class="muted-icon"><use href="#i-sliders"></use></svg></div>
+          <label class="toggle-row"><span><strong>远程指针</strong><small>让对方在画面上指出位置</small></span><input type="checkbox" id="pointerPermission" checked /><i></i></label>
+          <label class="toggle-row"><span><strong>会话聊天</strong><small>在会话中发送文字消息</small></span><input type="checkbox" id="chatPermission" checked /><i></i></label>
+          <p class="permission-note" id="permissionNote"><svg><use href="#i-info"></use></svg>网页版不会远程操作键鼠或打开文件。</p>
+        </section>
+
+        <section class="panel chat-panel">
+          <div class="panel-heading"><h2>会话消息</h2><span class="chat-count" id="chatCount">0</span></div>
+          <div class="chat-messages" id="chatMessages" aria-live="polite"><div class="chat-empty"><svg><use href="#i-message"></use></svg><p>连接后，在这里同步问题与步骤。</p></div></div>
+          <form class="chat-form" id="chatForm"><input id="chatInput" maxlength="500" placeholder="发送一条消息…" disabled /><button id="chatSend" type="submit" aria-label="发送消息" disabled><svg><use href="#i-send"></use></svg></button></form>
+        </section>
+      </aside>
+    </div>
+
+    <section class="trust-strip" aria-label="安全说明">
+      <div><span class="trust-number">01</span><p><strong>配对码即邀请</strong><span>8 位随机码，仅本次会话有效</span></p></div>
+      <div><span class="trust-number">02</span><p><strong>被控端始终确认</strong><span>未经同意，不开始传输画面</span></p></div>
+      <div><span class="trust-number">03</span><p><strong>随时可终止</strong><span>关闭页面或点击结束即可断开</span></p></div>
+    </section>
+  </main>
+
+  <dialog class="help-dialog binding-dialog" id="bindingDialog">
+    <div class="dialog-heading"><div><p class="section-kicker">设备绑定</p><h2>绑定后，无需再输配对码</h2></div><button class="icon-button" id="closeBindingButton" type="button" aria-label="关闭设备绑定"><svg><use href="#i-x"></use></svg></button></div>
+    <div class="binding-device-row"><label for="deviceName">本机名称</label><div><input id="deviceName" class="text-input" maxlength="24" placeholder="例如：我的电脑" /><button class="secondary-button" id="saveDeviceNameButton" type="button">保存</button></div></div>
+    <div class="binding-grid">
+      <section class="binding-card"><h3>我是被协助端</h3><p>生成一次性绑定码，让手机或另一台电脑输入。</p><button class="primary-button" id="generateBindCodeButton" type="button">生成绑定码</button><div class="bind-code-result" id="bindCodeResult" hidden><span id="bindCodeText"></span><button class="icon-button" id="copyBindCodeButton" type="button" aria-label="复制绑定码"><svg><use href="#i-copy"></use></svg></button></div></section>
+      <section class="binding-card"><h3>我是协助端</h3><p>输入对方生成的绑定码，建立长期设备关系。</p><input id="redeemBindCode" class="code-input" maxlength="9" placeholder="XXXX-XXXX" /><button class="secondary-button" id="redeemBindCodeButton" type="button">绑定这台设备</button></section>
+    </div>
+    <div class="binding-list-heading"><h3>已绑定设备</h3><span id="bindingCount">0</span></div>
+    <div class="binding-list" id="bindingList"><p class="binding-empty">还没有绑定设备。</p></div>
+    <p class="binding-security"><svg><use href="#i-shield"></use></svg>绑定关系保存在服务端，可随时撤销；网页版设备密钥存储在当前浏览器。</p>
+  </dialog>
+
+  <dialog class="help-dialog" id="helpDialog">
+    <div class="dialog-heading"><div><p class="section-kicker">使用说明</p><h2>关于连桥网页版</h2></div><button class="icon-button" id="closeHelpButton" type="button" aria-label="关闭说明"><svg><use href="#i-x"></use></svg></button></div>
+    <div class="help-section"><h3>怎么连接？</h3><p>首次使用输入配对码；在“设备绑定”中绑定后，可直接创建或加入已绑定会话。共享默认优先选择整个屏幕，你也可以在浏览器共享选择器中切换窗口。</p></div>
+    <div class="help-section"><h3>网页版能控制什么？</h3><p>当前版本支持共享画面、远程指针标注和文字沟通。浏览器安全策略不允许网页直接控制操作系统键鼠，也不支持任意安装手机上的屏幕共享；这些能力需要后续原生助手。</p></div>
+    <div class="help-section"><h3>数据经过哪里？</h3><p>配对、审批、聊天和兼容画面通过 Qoder Sites 加密中转。WebRTC 建立后，原画画面使用加密直连；直连失败时会自动回退到 Qoder 兼容中转。</p></div>
+    <button class="primary-button dialog-confirm" id="confirmHelpButton" type="button">我知道了</button>
+  </dialog>
+
+  <div class="toast-region" id="toastRegion" aria-live="assertive"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
