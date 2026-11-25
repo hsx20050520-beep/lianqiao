@@ -481,7 +481,7 @@ async function handleSend(supabase, storage, room, role, message) {
       if (role !== 'controller' || !room.approved || typeof message.quality !== 'string' || !qualityValues.has(message.quality)) return json({ error: 'not_allowed' }, 403);
       const fps = Number(message.fps);
       if (!fpsValues.has(fps)) return json({ error: 'invalid_fps' }, 400);
-      await enqueue(supabase, room.code, 'host', { type: 'media-settings', quality: message.quality, fps });
+      await enqueue(supabase, room.code, 'host', { type: 'media-settings', quality: message.quality, fps, mobile: message.mobile === true });
       return json({ ok: true }, 202);
     }
     case 'webrtc-offer': {
