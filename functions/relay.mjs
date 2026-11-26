@@ -205,20 +205,33 @@ async function handleDevice(request, supabase) {
       if (hostError) throw new Error('database_request_failed');
       if (!host) return json({ error: 'host_not_found' }, 404);
       const controllerName = safeName(body.name, '协助者');
-      const bindingId = crypto.randomUUID();
+      const hostName = safeName(host.name, '被协助端');
+      let bindingId = crypto.randomUUID();
       const { error: bindingError } = await supabase.from('device_bindings').insert({
         id: bindingId,
         host_device_id: host.id,
         controller_device_id: controller.id,
-        host_name: safeName(host.name, '被协助端'),
+        host_name: hostName,
         controller_name: controllerName,
         active_room_code: null,
         created_at: now,
         revoked_at: null,
       });
-      if (bindingError?.code === '23505') return json({ error: 'binding_exists' }, 409);
-      if (bindingError) throw new Error('database_request_failed');
-      return json({ ok: true, binding: { id: bindingId, hostName: safeName(host.name, '被协助端'), controllerName, role: 'controller' } }, 201);
+      if (bindingError?.code === '23505') {
+        const { data: rebound, error: reboundError } = await supabase.from('device_bindings')
+          .update({ host_name: hostName, controller_name: controllerName, active_room_code: null, created_at: now, revoked_at: null })
+          .eq('host_device_id', host.id)
+          .eq('controller_device_id', controller.id)
+          .not('revoked_at', 'is', null)
+          .select('id')
+          .maybeSingle();
+        if (reboundError) throw new Error('database_request_failed');
+        if (!rebound) return json({ error: 'binding_exists' }, 409);
+        bindingId = rebound.id;
+      } else if (bindingError) {
+        throw new Error('database_request_failed');
+      }
+      return json({ ok: true, binding: { id: bindingId, hostName, controllerName, role: 'controller' } }, 201);
     }
 
     if (op === 'bind-list') {
