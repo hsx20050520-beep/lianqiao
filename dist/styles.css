@@ -180,6 +180,8 @@ h1 em { color: var(--site-accent); font-style: normal; }
 .tool-button.active { color: var(--site-on-accent); background: var(--site-accent); }
 .tool-button.danger-tool { color: #d98e8e; }
 .tool-button.danger-tool:hover { color: #ffacac; background: rgba(255, 123, 123, .08); }
+.virtual-trackpad { position: absolute; z-index: 6; left: 14px; bottom: 72px; width: 178px; height: 116px; padding: 6px; border: 1px solid rgba(197, 242, 119, .28); border-radius: 14px; background: rgba(10, 16, 22, .9); backdrop-filter: blur(14px); box-shadow: 0 12px 30px rgba(0, 0, 0, .28); }
+.trackpad-surface { width: 100%; height: 100%; display: grid; place-items: center; border: 1px dashed rgba(197, 242, 119, .22); border-radius: 9px; color: rgba(237, 243, 247, .58); font-size: 10px; touch-action: none; user-select: none; }
 .quality-select { display: flex; align-items: center; gap: 5px; padding: 0 8px; color: #8e9eaa; border-left: 1px solid #2b3945; margin-left: 3px; }
 .quality-select svg { width: 15px; height: 15px; }
 .quality-select select { border: 0; outline: 0; color: #c1cdd6; background: transparent; font-size: 12px; }
