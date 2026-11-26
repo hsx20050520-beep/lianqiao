@@ -10,6 +10,20 @@
     balanced: { quality: 0.68, maxWidth: 1280, bitrate: 3_000_000, scale: 1.5 },
     low: { quality: 0.52, maxWidth: 854, bitrate: 1_200_000, scale: 3 },
   };
+  const mobileProfiles = {
+    uhd: { width: 3840, height: 2160, bitrate: 50_000_000, fps: 120 },
+    original: { width: 1920, height: 1080, bitrate: 12_000_000, fps: 60 },
+    high: { width: 1920, height: 1080, bitrate: 6_000_000, fps: 30 },
+    balanced: { width: 1280, height: 720, bitrate: 2_500_000, fps: 24 },
+    low: { width: 854, height: 480, bitrate: 1_200_000, fps: 15 },
+  };
+  const mobileFallbackProfiles = {
+    uhd: { width: 1920, height: 1080, bitrate: 8_000_000, fps: 60 },
+    original: { width: 1920, height: 1080, bitrate: 6_000_000, fps: 30 },
+    high: { width: 1280, height: 720, bitrate: 4_000_000, fps: 30 },
+    balanced: { width: 1280, height: 720, bitrate: 2_000_000, fps: 24 },
+    low: { width: 854, height: 480, bitrate: 1_000_000, fps: 15 },
+  };
   const qualityLabels = { uhd: '4K 原画', original: '原画', high: '高清', balanced: '均衡', low: '省流' };
   const state = {
     mode: 'host',
@@ -30,6 +44,8 @@
     quality: 'uhd',
     fps: 120,
     remoteMobile: false,
+    androidFallback: 0,
+    androidDegradeSent: false,
     webrtcActive: false,
     webrtcRtt: null,
     usingTurn: false,
@@ -64,6 +80,14 @@
     pointerHideTimer: null,
     chatTotal: 0,
   };
+
+  function mobileQualityLabel() {
+    if (!state.remoteMobile) return qualityLabels[state.quality];
+    if (state.androidFallback) return '安卓高清';
+    if (state.quality === 'uhd') return '安卓 4K';
+    if (state.quality === 'low') return '安卓省流';
+    return '安卓高清';
+  }
 
   function isMobileDevice() {
     return Boolean(navigator.userAgentData?.mobile) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -200,7 +224,7 @@
         state.lastStatsBytes = totalBytes;
         state.lastStatsAt = now;
         $('mediaStats').textContent = `${Math.round(fps)} fps · ${Math.round(kbps)} KB/s`;
-        const mediaQuality = state.remoteMobile ? '安卓兼容' : qualityLabels[state.quality];
+        const mediaQuality = mobileQualityLabel();
         $('mediaBadgeText').textContent = `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${mediaQuality} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`;
         $('mediaShell').dataset.transport = state.usingTurn ? 'turn' : 'webrtc';
         $('activePeerDetail').textContent = `${mediaQuality} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps`;
@@ -318,7 +342,7 @@
     $('mediaShell').dataset.transport = state.webrtcActive ? (state.usingTurn ? 'turn' : 'webrtc') : 'relay';
 
     if (active) {
-      const mediaQuality = state.remoteMobile ? '安卓兼容' : qualityLabels[state.quality];
+      const mediaQuality = mobileQualityLabel();
       $('activePeerName').textContent = state.peerName || (state.mode === 'host' ? '协助者' : '被协助者');
       $('peerAvatar').textContent = (state.peerName || '协').slice(0, 1);
       $('activePeerDetail').textContent = state.mode === 'host'
@@ -459,6 +483,8 @@
   async function connectRelay() {
     state.intentionalClose = false;
     state.remoteMobile = false;
+    state.androidFallback = 0;
+    state.androidDegradeSent = false;
     state.phase = 'connecting';
     const binding = bindingForRole(state.mode);
     $('displayCode').textContent = binding ? '已绑定设备' : formatCode(state.room);
@@ -656,12 +682,21 @@
           showRemotePointer(message.x, message.y, Boolean(message.click));
         }
         break;
+      case 'android-degrade':
+        if (state.mode === 'host' && state.remoteMobile) {
+          state.androidFallback = 1;
+          applyEncodingQuality();
+          render();
+          toast('Android 高画质解码不稳定，已自动降至 1080p', 'error');
+        }
+        break;
       case 'media-settings':
         if (state.mode === 'host' && qualities[message.quality] && [15, 24, 30, 60, 120].includes(Number(message.fps))) {
           const mobileChanged = state.remoteMobile !== Boolean(message.mobile);
           state.quality = message.quality;
           state.fps = Number(message.fps);
           state.remoteMobile = Boolean(message.mobile);
+          state.androidFallback = 0;
           applyQuality(state.quality);
           applyFps(state.fps);
           if (mobileChanged && state.peerConnection && state.captureStream) {
@@ -905,6 +940,8 @@
   function markWebRTCConnected() {
     if (!state.peerConnection || state.webrtcActive) return;
     state.webrtcActive = true;
+    state.androidFallback = 0;
+    state.androidDegradeSent = false;
     state.webrtcRtt = null;
     state.usingTurn = false;
     state.lastStatsBytes = 0;
@@ -979,7 +1016,13 @@
         if (isMobileDevice()) {
           event.track.onmute = () => {
             setTimeout(() => {
-              if (event.track.muted && state.webrtcActive) fallbackFromWebRTC(true);
+              if (!event.track.muted || !state.webrtcActive) return;
+              if (!state.androidDegradeSent) {
+                state.androidDegradeSent = true;
+                sendJson({ type: 'android-degrade' });
+              } else {
+                fallbackFromWebRTC(true);
+              }
             }, 2500);
           };
           event.track.onended = () => fallbackFromWebRTC(true);
@@ -1093,9 +1136,10 @@
       let fps = state.fps;
       if (state.remoteMobile) {
         const settings = sender.track.getSettings();
-        scale = Math.max(scale, Math.ceil((settings.width || 1920) / 1280), Math.ceil((settings.height || 1080) / 720));
-        bitrate = Math.min(bitrate, 4_000_000);
-        fps = Math.min(fps, 30);
+        const mobile = state.androidFallback ? mobileFallbackProfiles[state.quality] : mobileProfiles[state.quality];
+        scale = Math.max(scale, Math.ceil((settings.width || 1920) / mobile.width), Math.ceil((settings.height || 1080) / mobile.height));
+        bitrate = Math.min(bitrate, mobile.bitrate);
+        fps = Math.min(fps, mobile.fps);
       }
       parameters.encodings[0].maxBitrate = bitrate;
       parameters.encodings[0].scaleResolutionDownBy = scale;
