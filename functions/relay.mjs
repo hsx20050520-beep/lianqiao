@@ -341,7 +341,7 @@ async function handleDevice(request, supabase) {
       if (room.closed) return json({ error: 'session_closed' }, 410);
       const controllerName = safeName(binding.controller_name, '协助者');
       const { data, error } = await supabase.from('relay_rooms')
-        .update({ controller_name: controllerName, approved: true, control_allowed: false, updated_at: new Date().toISOString() })
+        .update({ controller_name: controllerName, approved: true, control_allowed: true, updated_at: new Date().toISOString() })
         .eq('code', code)
         .eq('closed', false)
         .select('code')
@@ -354,8 +354,8 @@ async function handleDevice(request, supabase) {
         return json({ error: 'role_taken' }, 409);
       }
       await enqueue(supabase, code, 'host', { type: 'bound-rejoin' });
-      await enqueue(supabase, code, 'host', { type: 'approved', peerName: controllerName, pointer: room.pointer_allowed, chat: room.chat_allowed, control: false });
-      await enqueue(supabase, code, 'controller', { type: 'approved', peerName: room.host_name, pointer: room.pointer_allowed, chat: room.chat_allowed, control: false });
+      await enqueue(supabase, code, 'host', { type: 'approved', peerName: controllerName, pointer: room.pointer_allowed, chat: room.chat_allowed, control: true });
+      await enqueue(supabase, code, 'controller', { type: 'approved', peerName: room.host_name, pointer: room.pointer_allowed, chat: room.chat_allowed, control: true });
       return json({ ok: true, room: code }, 201);
     }
 
