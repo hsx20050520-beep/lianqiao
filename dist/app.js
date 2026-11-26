@@ -4,12 +4,13 @@
   const $ = (id) => document.getElementById(id);
   const views = [...document.querySelectorAll('.view')];
   const qualities = {
+    uhd: { quality: 0.95, maxWidth: 3840, bitrate: 50_000_000, scale: 1 },
     original: { quality: 0.92, maxWidth: Number.MAX_SAFE_INTEGER, bitrate: 12_000_000, scale: 1 },
     high: { quality: 0.84, maxWidth: 1920, bitrate: 6_000_000, scale: 1 },
     balanced: { quality: 0.68, maxWidth: 1280, bitrate: 3_000_000, scale: 1.5 },
     low: { quality: 0.52, maxWidth: 854, bitrate: 1_200_000, scale: 3 },
   };
-  const qualityLabels = { original: '原画', high: '高清', balanced: '均衡', low: '省流' };
+  const qualityLabels = { uhd: '4K 原画', original: '原画', high: '高清', balanced: '均衡', low: '省流' };
   const state = {
     mode: 'host',
     phase: 'idle',
@@ -23,9 +24,11 @@
     approved: false,
     pointerAllowed: true,
     chatAllowed: true,
+    controlAllowed: false,
+    controlEnabled: false,
     pointerEnabled: true,
-    quality: 'original',
-    fps: 30,
+    quality: 'uhd',
+    fps: 120,
     remoteMobile: false,
     webrtcActive: false,
     webrtcRtt: null,
@@ -33,6 +36,7 @@
     webrtcSetupPromise: null,
     webrtcGeneration: 0,
     peerConnection: null,
+    controlChannel: null,
     pendingIce: [],
     captureStream: null,
     captureTimer: null,
@@ -230,6 +234,14 @@
     }
   }
 
+  function sendControl(payload) {
+    if (!state.controlEnabled || !state.controlAllowed) return false;
+    if (state.controlChannel?.readyState === 'open') {
+      try { state.controlChannel.send(JSON.stringify({ type: 'control', ...payload })); return true; } catch {}
+    }
+    return sendJson({ type: 'control', ...payload });
+  }
+
   async function sendFrame(buffer) {
     if (!state.transport.connected) return false;
     try {
@@ -264,15 +276,20 @@
     const badges = { idle: '未连接', connecting: '连接中', waiting: '等待中', pending: '待确认', active: '已连接', error: '已断开' };
     $('sessionBadge').textContent = badges[state.phase] || '未连接';
     $('sessionBadge').classList.toggle('active', active);
-    $('permissionSummary').textContent = active ? (state.mode === 'host' ? `指针${state.pointerAllowed ? '开' : '关'} · 聊天${state.chatAllowed ? '开' : '关'}` : '由对方控制') : '等待授权';
+    $('permissionSummary').textContent = active ? (state.mode === 'host' ? `指针${state.pointerAllowed ? '开' : '关'} · 聊天${state.chatAllowed ? '开' : '关'} · 控制${state.controlAllowed ? '开' : '关'}` : '由对方控制') : '等待授权';
 
     $('pointerPermission').disabled = state.mode !== 'host';
     $('chatPermission').disabled = state.mode !== 'host';
+    $('controlPermission').disabled = state.mode !== 'host' || !window.lianqiaoNative?.applyControl;
     $('pointerPermission').checked = state.pointerAllowed;
     $('chatPermission').checked = state.chatAllowed;
+    $('controlPermission').checked = state.controlAllowed;
     $('pointerButton').disabled = !state.pointerAllowed;
     $('pointerButton').classList.toggle('active', state.pointerEnabled && state.pointerAllowed);
     $('pointerButton').setAttribute('aria-pressed', String(state.pointerEnabled && state.pointerAllowed));
+    $('controlButton').disabled = !state.controlAllowed;
+    $('controlButton').classList.toggle('active', state.controlEnabled && state.controlAllowed);
+    $('controlButton').setAttribute('aria-pressed', String(state.controlEnabled && state.controlAllowed));
     $('chatInput').disabled = !active || !state.chatAllowed;
     $('chatSend').disabled = !active || !state.chatAllowed;
 
@@ -551,6 +568,12 @@
     state.transport.frameLoopRunning = false;
   }
 
+  function applyIncomingControl(message) {
+    if (state.mode !== 'host' || !state.controlAllowed || !message) return;
+    window.lianqiaoNative?.applyControl?.(message);
+    if (message.action === 'mousemove' || message.action === 'click') showRemotePointer(message.x || 0, message.y || 0, message.action === 'click');
+  }
+
   function handleRelayMessage(message) {
     if (!message || typeof message.type !== 'string') return;
 
@@ -579,6 +602,7 @@
         state.peerName = safeName(message.peerName, state.mode === 'host' ? '协助者' : '被协助者');
         state.pointerAllowed = message.pointer !== false;
         state.chatAllowed = message.chat !== false;
+        state.controlAllowed = message.control === true;
         state.hasFrame = false;
         showOnly('activeView');
         addChat('会话已建立，可以开始协助。', 'system', true);
@@ -616,10 +640,15 @@
       case 'permissions':
         state.pointerAllowed = Boolean(message.pointer);
         state.chatAllowed = Boolean(message.chat);
+        state.controlAllowed = Boolean(message.control);
+        if (!state.controlAllowed) state.controlEnabled = false;
         render();
         break;
       case 'chat':
         if (typeof message.text === 'string') addChat(message.text.slice(0, 500), message.from === state.mode ? 'own' : 'peer');
+        break;
+      case 'control':
+        applyIncomingControl(message);
         break;
       case 'cursor':
         if (state.mode === 'host' && state.pointerAllowed && Number.isFinite(message.x) && Number.isFinite(message.y)) {
@@ -627,7 +656,7 @@
         }
         break;
       case 'media-settings':
-        if (state.mode === 'host' && qualities[message.quality] && [15, 24, 30, 60].includes(Number(message.fps))) {
+        if (state.mode === 'host' && qualities[message.quality] && [15, 24, 30, 60, 120].includes(Number(message.fps))) {
           const mobileChanged = state.remoteMobile !== Boolean(message.mobile);
           state.quality = message.quality;
           state.fps = Number(message.fps);
@@ -860,6 +889,7 @@
       try { pc.close(); } catch {}
     }
     state.peerConnection = null;
+    state.controlChannel = null;
     state.webrtcActive = false;
     state.usingTurn = false;
     state.webrtcSetupPromise = null;
@@ -931,6 +961,12 @@
         rtcpMuxPolicy: 'require',
       });
       state.peerConnection = pc;
+      pc.ondatachannel = (event) => {
+        state.controlChannel = event.channel;
+        state.controlChannel.onmessage = (message) => {
+          try { applyIncomingControl(JSON.parse(message.data)); } catch {}
+        };
+      };
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.onicecandidate = (event) => {
         if (event.candidate) sendJson({ type: 'webrtc-ice', candidate: event.candidate.toJSON() });
@@ -981,6 +1017,10 @@
       rtcpMuxPolicy: 'require',
     });
     state.peerConnection = pc;
+    state.controlChannel = pc.createDataChannel('control', { ordered: false, maxRetransmits: 0 });
+    state.controlChannel.onmessage = (message) => {
+      try { applyIncomingControl(JSON.parse(message.data)); } catch {}
+    };
     pc.onicecandidate = (event) => {
       if (event.candidate) sendJson({ type: 'webrtc-ice', candidate: event.candidate.toJSON() });
     };
@@ -1065,7 +1105,7 @@
   }
 
   async function applyFps(fps) {
-    if (![15, 24, 30, 60].includes(fps)) return;
+    if (![15, 24, 30, 60, 120].includes(fps)) return;
     state.fps = fps;
     $('fpsSelect').value = String(fps);
     const track = state.captureStream?.getVideoTracks()[0];
@@ -1268,18 +1308,26 @@
 
   function queuePointer(event, click = false) {
     if (state.mode !== 'controller' || !state.pointerEnabled || !state.pointerAllowed || !state.hasFrame) return;
-    const canvas = $('remoteCanvas');
-    const rect = containedRect(canvas, canvas.width, canvas.height);
+    const surface = state.webrtcActive ? $('remoteVideo') : $('remoteCanvas');
+    const width = state.webrtcActive ? surface.videoWidth : surface.width;
+    const height = state.webrtcActive ? surface.videoHeight : surface.height;
+    if (!width || !height) return;
+    const rect = containedRect(surface, width, height);
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
-    state.pointerPending = { x, y, click: click || Boolean(state.pointerPending?.click) };
+    state.pointerPending = { x, y, click: click || Boolean(state.pointerPending?.click), button: event.button || 0 };
     if (!state.pointerFrame) {
       state.pointerFrame = requestAnimationFrame(() => {
         state.pointerFrame = 0;
         const now = performance.now();
         if (now - state.lastPointerSent < 32 || !state.pointerPending) return;
-        sendJson({ type: 'cursor', ...state.pointerPending });
+        if (state.controlEnabled && state.controlAllowed) {
+          sendControl({ action: 'mousemove', x: state.pointerPending.x, y: state.pointerPending.y });
+          if (state.pointerPending.click) sendControl({ action: 'click', button: state.pointerPending.button });
+        } else {
+          sendJson({ type: 'cursor', x: state.pointerPending.x, y: state.pointerPending.y, click: state.pointerPending.click });
+        }
         state.pointerPending = null;
         state.lastPointerSent = now;
       });
@@ -1345,13 +1393,20 @@
 
   $('pointerPermission').addEventListener('change', () => {
     state.pointerAllowed = $('pointerPermission').checked;
-    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed });
+    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed, control: state.controlAllowed });
     render();
   });
   $('chatPermission').addEventListener('change', () => {
     state.chatAllowed = $('chatPermission').checked;
-    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed });
+    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed, control: state.controlAllowed });
     render();
+  });
+  $('controlPermission').addEventListener('change', () => {
+    state.controlAllowed = $('controlPermission').checked;
+    if (!state.controlAllowed) state.controlEnabled = false;
+    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed, control: state.controlAllowed });
+    render();
+    toast(state.controlAllowed ? '远程键鼠控制已开启，可随时关闭' : '远程键鼠控制已关闭', state.controlAllowed ? 'success' : '');
   });
 
   $('chatForm').addEventListener('submit', (event) => {
@@ -1367,6 +1422,12 @@
   $('pointerButton').addEventListener('click', () => {
     state.pointerEnabled = !state.pointerEnabled;
     render();
+  });
+  $('controlButton').addEventListener('click', () => {
+    if (!state.controlAllowed) return;
+    state.controlEnabled = !state.controlEnabled;
+    render();
+    toast(state.controlEnabled ? '远程控制已启用' : '已切换为仅标注模式', state.controlEnabled ? 'success' : '');
   });
   function sendMediaSettings() {
     state.quality = $('qualitySelect').value;
@@ -1384,12 +1445,32 @@
       toast('当前浏览器不支持全屏显示', 'error');
     }
   });
-  $('remoteCanvas').addEventListener('pointermove', (event) => queuePointer(event));
-  $('remoteCanvas').addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    $('remoteCanvas').setPointerCapture?.(event.pointerId);
-    queuePointer(event, true);
-  });
+  const bindRemoteInput = (surface) => {
+    surface.addEventListener('pointermove', (event) => queuePointer(event));
+    surface.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      surface.focus?.();
+      surface.setPointerCapture?.(event.pointerId);
+      queuePointer(event, true);
+    });
+    surface.addEventListener('wheel', (event) => {
+      if (!state.controlEnabled || !state.controlAllowed) return;
+      event.preventDefault();
+      sendControl({ action: 'wheel', delta: event.deltaY });
+    }, { passive: false });
+    surface.addEventListener('keydown', (event) => {
+      if (!state.controlEnabled || !state.controlAllowed) return;
+      event.preventDefault();
+      sendControl({ action: 'key', key: event.key, down: true, modifiers: { ctrl: event.ctrlKey, alt: event.altKey, shift: event.shiftKey, meta: event.metaKey } });
+    });
+    surface.addEventListener('keyup', (event) => {
+      if (!state.controlEnabled || !state.controlAllowed) return;
+      event.preventDefault();
+      sendControl({ action: 'key', key: event.key, down: false, modifiers: { ctrl: event.ctrlKey, alt: event.altKey, shift: event.shiftKey, meta: event.metaKey } });
+    });
+  };
+  bindRemoteInput($('remoteCanvas'));
+  bindRemoteInput($('remoteVideo'));
 
   $('openBindingButton').addEventListener('click', async () => {
     await registerDevice();
@@ -1432,6 +1513,15 @@
     } catch (error) {
       toast(error instanceof Error ? error.message : '绑定失败', 'error');
     }
+  });
+
+  window.lianqiaoNative?.onEmergencyStop?.(() => {
+    state.controlAllowed = false;
+    state.controlEnabled = false;
+    $('controlPermission').checked = false;
+    sendJson({ type: 'permissions', pointer: state.pointerAllowed, chat: state.chatAllowed, control: false });
+    render();
+    toast('已通过紧急停止热键关闭远程控制', 'error');
   });
 
   $('helpButton').addEventListener('click', () => $('helpDialog').showModal());
