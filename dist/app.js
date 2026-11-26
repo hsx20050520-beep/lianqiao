@@ -639,6 +639,12 @@
         showOnly('approvalView');
         render();
         break;
+      case 'bound-rejoin':
+        if (state.mode === 'host' && state.captureStream) {
+          closeWebRTC();
+          setupWebRTC(state.captureStream);
+        }
+        break;
       case 'approved':
         state.approved = true;
         state.phase = 'active';
