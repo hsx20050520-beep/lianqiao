@@ -3,8 +3,8 @@ const codePattern = /^[A-Z2-9]{8}$/;
 const pairCodePattern = /^[A-HJ-NP-Z2-9]{8}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const codeAlphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-const qualityValues = new Set(['original', 'high', 'balanced', 'low']);
-const fpsValues = new Set([15, 24, 30, 60]);
+const qualityValues = new Set(['uhd', 'original', 'high', 'balanced', 'low']);
+const fpsValues = new Set([15, 24, 30, 60, 120]);
 const maxFrameBytes = 480 * 1024;
 const attempts = new Map();
 
@@ -277,6 +277,7 @@ async function handleDevice(request, supabase) {
           approved: false,
           pointer_allowed: true,
           chat_allowed: true,
+          control_allowed: false,
           frame_version: 0,
           created_at: now,
           updated_at: now,
@@ -318,7 +319,7 @@ async function handleDevice(request, supabase) {
       if (room.closed) return json({ error: 'session_closed' }, 410);
       const controllerName = safeName(binding.controller_name, '协助者');
       const { data, error } = await supabase.from('relay_rooms')
-        .update({ controller_name: controllerName, approved: false, updated_at: new Date().toISOString() })
+        .update({ controller_name: controllerName, approved: false, control_allowed: false, updated_at: new Date().toISOString() })
         .eq('code', code)
         .eq('closed', false)
         .is('controller_name', null)
@@ -343,7 +344,7 @@ async function handleDevice(request, supabase) {
 
 async function getRoom(supabase, code) {
   const { data, error } = await supabase.from('relay_rooms')
-    .select('code,host_name,controller_name,approved,pointer_allowed,chat_allowed,frame_version,created_at,updated_at,closed')
+    .select('code,host_name,controller_name,approved,pointer_allowed,chat_allowed,control_allowed,frame_version,created_at,updated_at,closed')
     .eq('code', code)
     .maybeSingle();
   if (error) throw new Error('database_request_failed');
@@ -437,8 +438,8 @@ async function handleSend(supabase, storage, room, role, message) {
         .maybeSingle();
       if (error) throw new Error('database_request_failed');
       if (!data) return json({ error: 'not_allowed' }, 409);
-      await enqueue(supabase, room.code, 'host', { type: 'approved', peerName: room.controller_name, pointer: room.pointer_allowed, chat: room.chat_allowed });
-      await enqueue(supabase, room.code, 'controller', { type: 'approved', peerName: room.host_name, pointer: room.pointer_allowed, chat: room.chat_allowed });
+      await enqueue(supabase, room.code, 'host', { type: 'approved', peerName: room.controller_name, pointer: room.pointer_allowed, chat: room.chat_allowed, control: room.control_allowed === true });
+      await enqueue(supabase, room.code, 'controller', { type: 'approved', peerName: room.host_name, pointer: room.pointer_allowed, chat: room.chat_allowed, control: room.control_allowed === true });
       return json({ ok: true }, 202);
     }
     case 'reject': {
@@ -452,9 +453,10 @@ async function handleSend(supabase, storage, room, role, message) {
       if (role !== 'host') return json({ error: 'not_allowed' }, 403);
       const pointer = message.pointer !== false;
       const chat = message.chat !== false;
-      const { error } = await supabase.from('relay_rooms').update({ pointer_allowed: pointer, chat_allowed: chat, updated_at: now }).eq('code', room.code);
+      const control = message.control === true;
+      const { error } = await supabase.from('relay_rooms').update({ pointer_allowed: pointer, chat_allowed: chat, control_allowed: control, updated_at: now }).eq('code', room.code);
       if (error) throw new Error('database_request_failed');
-      if (room.approved) await enqueue(supabase, room.code, 'controller', { type: 'permissions', pointer, chat });
+      if (room.approved) await enqueue(supabase, room.code, 'controller', { type: 'permissions', pointer, chat, control });
       return json({ ok: true }, 202);
     }
     case 'chat': {
@@ -470,6 +472,28 @@ async function handleSend(supabase, storage, room, role, message) {
       const y = Number(message.y);
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return json({ error: 'invalid_cursor' }, 400);
       await enqueue(supabase, room.code, 'host', { type: 'cursor', x, y, click: message.click === true });
+      return json({ ok: true }, 202);
+    }
+    case 'control': {
+      if (role !== 'controller' || !room.approved || room.control_allowed !== true) return json({ error: 'not_allowed' }, 403);
+      const action = message.action;
+      if (action === 'mousemove') {
+        const x = Number(message.x);
+        const y = Number(message.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return json({ error: 'invalid_control' }, 400);
+        await enqueue(supabase, room.code, 'host', { type: 'control', action, x, y });
+      } else if (action === 'click') {
+        const button = [0, 1, 2].includes(Number(message.button)) ? Number(message.button) : 0;
+        await enqueue(supabase, room.code, 'host', { type: 'control', action, button });
+      } else if (action === 'wheel') {
+        const delta = Math.max(-1000, Math.min(1000, Number(message.delta) || 0));
+        await enqueue(supabase, room.code, 'host', { type: 'control', action, delta });
+      } else if (action === 'key') {
+        if (typeof message.key !== 'string' || !message.key || message.key.length > 32) return json({ error: 'invalid_control' }, 400);
+        await enqueue(supabase, room.code, 'host', { type: 'control', action, key: message.key, down: message.down !== false, modifiers: { ctrl: message.modifiers?.ctrl === true, alt: message.modifiers?.alt === true, shift: message.modifiers?.shift === true, meta: message.modifiers?.meta === true } });
+      } else {
+        return json({ error: 'invalid_control' }, 400);
+      }
       return json({ ok: true }, 202);
     }
     case 'quality': {
@@ -515,7 +539,7 @@ async function handleSend(supabase, storage, room, role, message) {
         await enqueue(supabase, room.code, 'controller', { type: 'peer-left' });
         await removeFrame(storage, room.code, Number(room.frame_version || 0));
       } else {
-        await supabase.from('relay_rooms').update({ controller_name: null, approved: false, updated_at: now }).eq('code', room.code);
+        await supabase.from('relay_rooms').update({ controller_name: null, approved: false, control_allowed: false, updated_at: now }).eq('code', room.code);
         await enqueue(supabase, room.code, 'host', { type: 'peer-left' });
       }
       return json({ ok: true }, 202);
@@ -592,6 +616,7 @@ export async function handleRelay({ request, supabase, storage, env }) {
         approved: false,
         pointer_allowed: true,
         chat_allowed: true,
+        control_allowed: false,
         frame_version: 0,
         created_at: now,
         updated_at: now,
@@ -609,7 +634,7 @@ export async function handleRelay({ request, supabase, storage, env }) {
       if (!room || room.closed) return json({ error: 'session_not_found' }, 404);
       if (room.controller_name) return json({ error: 'role_taken' }, 409);
       const { data, error } = await supabase.from('relay_rooms')
-        .update({ controller_name: safeName(body.name, '协助者'), approved: false, updated_at: new Date().toISOString() })
+        .update({ controller_name: safeName(body.name, '协助者'), approved: false, control_allowed: false, updated_at: new Date().toISOString() })
         .eq('code', code)
         .is('controller_name', null)
         .select('code')
