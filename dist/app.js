@@ -284,6 +284,7 @@
     $('pointerPermission').checked = state.pointerAllowed;
     $('chatPermission').checked = state.chatAllowed;
     $('controlPermission').checked = state.controlAllowed;
+    window.lianqiaoNative?.setControlPermission?.(active && state.controlAllowed);
     $('pointerButton').disabled = !state.pointerAllowed;
     $('pointerButton').classList.toggle('active', state.pointerEnabled && state.pointerAllowed);
     $('pointerButton').setAttribute('aria-pressed', String(state.pointerEnabled && state.pointerAllowed));
