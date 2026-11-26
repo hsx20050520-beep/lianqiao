@@ -1,6 +1,6 @@
 {
   "name": "lianqiao-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "连桥跨网络远程协助桌面端",
   "author": "hsx20050520-beep",
@@ -23,6 +23,7 @@
     },
     "files": [
       "main.cjs",
+      "preload.cjs",
       "package.json"
     ],
     "win": {
@@ -36,5 +37,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "dependencies": {
+    "@nut-tree/nut-js": "^4.2.0"
   }
 }
