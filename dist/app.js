@@ -359,7 +359,9 @@
 
     $('stageFooterText').textContent = state.mode === 'host'
       ? '你可以随时停止共享；网页版不会远程操作键鼠或打开文件。'
-      : '移动指针即可让对方看到位置；点击画面可发送强调提示。';
+      : state.controlEnabled
+        ? '远程控制已启用：鼠标移入画面即可同步，点击可操作。'
+        : '移动指针即可让对方看到位置；点击画面可发送强调提示。';
     $('permissionNote').innerHTML = state.mode === 'host'
       ? '<svg><use href="#i-info"></use></svg>网页版不会远程操作键鼠或打开文件。'
       : '<svg><use href="#i-info"></use></svg>共享权限由被协助端实时控制。';
@@ -630,6 +632,7 @@
         state.pointerAllowed = message.pointer !== false;
         state.chatAllowed = message.chat !== false;
         state.controlAllowed = message.control === true;
+        if (state.controlAllowed) state.controlEnabled = true;
         state.hasFrame = false;
         showOnly('activeView');
         addChat('会话已建立，可以开始协助。', 'system', true);
@@ -668,6 +671,7 @@
         state.pointerAllowed = Boolean(message.pointer);
         state.chatAllowed = Boolean(message.chat);
         state.controlAllowed = Boolean(message.control);
+        state.controlEnabled = state.controlAllowed;
         if (!state.controlAllowed) state.controlEnabled = false;
         render();
         break;
