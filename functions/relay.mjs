@@ -501,6 +501,11 @@ async function handleSend(supabase, storage, room, role, message) {
       await enqueue(supabase, room.code, 'host', { type: 'quality', value: message.value });
       return json({ ok: true }, 202);
     }
+    case 'android-degrade': {
+      if (role !== 'controller' || !room.approved) return json({ error: 'not_allowed' }, 403);
+      await enqueue(supabase, room.code, 'host', { type: 'android-degrade' });
+      return json({ ok: true }, 202);
+    }
     case 'media-settings': {
       if (role !== 'controller' || !room.approved || typeof message.quality !== 'string' || !qualityValues.has(message.quality)) return json({ error: 'not_allowed' }, 403);
       const fps = Number(message.fps);
