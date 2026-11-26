@@ -344,7 +344,6 @@ async function handleDevice(request, supabase) {
         .update({ controller_name: controllerName, approved: true, control_allowed: false, updated_at: new Date().toISOString() })
         .eq('code', code)
         .eq('closed', false)
-        .is('controller_name', null)
         .select('code')
         .maybeSingle();
       if (error) throw new Error('database_request_failed');
@@ -354,6 +353,7 @@ async function handleDevice(request, supabase) {
         if (latest.closed) return json({ error: 'session_closed' }, 410);
         return json({ error: 'role_taken' }, 409);
       }
+      await enqueue(supabase, code, 'host', { type: 'bound-rejoin' });
       await enqueue(supabase, code, 'host', { type: 'approved', peerName: controllerName, pointer: room.pointer_allowed, chat: room.chat_allowed, control: false });
       await enqueue(supabase, code, 'controller', { type: 'approved', peerName: room.host_name, pointer: room.pointer_allowed, chat: room.chat_allowed, control: false });
       return json({ ok: true, room: code }, 201);
