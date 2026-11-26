@@ -362,7 +362,9 @@
     $('stageFooterText').textContent = state.mode === 'host'
       ? '你可以随时停止共享；网页版不会远程操作键鼠或打开文件。'
       : state.controlEnabled
-        ? '远程控制已启用：鼠标移入画面即可同步，点击可操作。'
+        ? isMobileDevice()
+          ? '触屏控制：单指拖动移动鼠标，轻点画面点击。'
+          : '远程控制已启用：鼠标移入画面即可同步，点击可操作。'
         : '移动指针即可让对方看到位置；点击画面可发送强调提示。';
     $('permissionNote').innerHTML = state.mode === 'host'
       ? '<svg><use href="#i-info"></use></svg>网页版不会远程操作键鼠或打开文件。'
