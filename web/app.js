@@ -1059,6 +1059,7 @@
       parameters.encodings[0].maxBitrate = bitrate;
       parameters.encodings[0].scaleResolutionDownBy = scale;
       parameters.encodings[0].maxFramerate = fps;
+      parameters.degradationPreference = 'maintain-framerate';
       sender.setParameters(parameters).catch(() => {});
     } catch {}
   }
