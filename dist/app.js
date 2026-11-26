@@ -24,6 +24,13 @@
     balanced: { width: 1280, height: 720, bitrate: 2_000_000, fps: 24 },
     low: { width: 854, height: 480, bitrate: 1_000_000, fps: 15 },
   };
+  const mobileStableProfiles = {
+    uhd: { width: 1280, height: 720, bitrate: 4_000_000, fps: 30 },
+    original: { width: 1280, height: 720, bitrate: 4_000_000, fps: 30 },
+    high: { width: 1280, height: 720, bitrate: 4_000_000, fps: 30 },
+    balanced: { width: 1280, height: 720, bitrate: 2_500_000, fps: 24 },
+    low: { width: 854, height: 480, bitrate: 1_000_000, fps: 15 },
+  };
   const qualityLabels = { uhd: '4K 原画', original: '原画', high: '高清', balanced: '均衡', low: '省流' };
   const state = {
     mode: 'host',
@@ -42,12 +49,15 @@
     chatAllowed: true,
     controlAllowed: false,
     controlEnabled: false,
+    inputMode: 'touch',
+    virtualPosition: { x: 0.5, y: 0.5 },
     pointerEnabled: true,
     quality: 'uhd',
     fps: 120,
     remoteMobile: false,
     androidFallback: 0,
-    androidDegradeSent: false,
+    androidDegradeLevel: 0,
+    lowFpsSeconds: 0,
     webrtcActive: false,
     webrtcRtt: null,
     usingTurn: false,
@@ -85,7 +95,8 @@
 
   function mobileQualityLabel() {
     if (!state.remoteMobile) return qualityLabels[state.quality];
-    if (state.androidFallback) return '安卓高清';
+    if (state.androidFallback === 2) return '安卓流畅';
+    if (state.androidFallback === 1) return '安卓高清';
     if (state.quality === 'uhd') return '安卓 4K';
     if (state.quality === 'low') return '安卓省流';
     return '安卓高清';
@@ -230,6 +241,11 @@
         $('mediaBadgeText').textContent = `${state.usingTurn ? 'TURN 加密' : 'WebRTC 直连'} ${mediaQuality} · ${state.fps} fps${state.webrtcRtt ? ` · ${state.webrtcRtt}ms` : ''}`;
         $('mediaShell').dataset.transport = state.usingTurn ? 'turn' : 'webrtc';
         $('activePeerDetail').textContent = `${mediaQuality} · ${state.usingTurn ? 'TURN 加密' : '直连'} · ${state.fps} fps`;
+        if (state.mode === 'controller' && isMobileDevice()) {
+          if (fps > 0 && fps < 12) state.lowFpsSeconds += 1;
+          else if (fps >= 15) state.lowFpsSeconds = 0;
+          if (state.lowFpsSeconds >= 3) requestAndroidDegrade();
+        }
         return;
       } catch {}
     }
@@ -266,6 +282,18 @@
       try { state.controlChannel.send(JSON.stringify({ type: 'control', ...payload })); return true; } catch {}
     }
     return sendJson({ type: 'control', ...payload });
+  }
+
+  function requestAndroidDegrade() {
+    if (!state.webrtcActive) return;
+    if (state.androidDegradeLevel < 2) {
+      state.androidDegradeLevel += 1;
+      state.androidFallback = state.androidDegradeLevel;
+      state.lowFpsSeconds = 0;
+      sendJson({ type: 'android-degrade', level: state.androidDegradeLevel });
+    } else {
+      fallbackFromWebRTC(true);
+    }
   }
 
   async function sendFrame(buffer) {
@@ -317,6 +345,11 @@
     $('controlButton').disabled = !state.controlAllowed;
     $('controlButton').classList.toggle('active', state.controlEnabled && state.controlAllowed);
     $('controlButton').setAttribute('aria-pressed', String(state.controlEnabled && state.controlAllowed));
+    $('inputModeButton').disabled = !state.controlEnabled;
+    $('inputModeButton').classList.toggle('active', state.inputMode === 'mouse');
+    $('inputModeButton').setAttribute('aria-pressed', String(state.inputMode === 'mouse'));
+    $('inputModeButton').querySelector('span').textContent = state.inputMode === 'mouse' ? '虚拟鼠标' : '触控';
+    $('virtualTrackpad').hidden = !state.controlEnabled || state.inputMode !== 'mouse';
     $('chatInput').disabled = !active || !state.chatAllowed;
     $('chatSend').disabled = !active || !state.chatAllowed;
 
@@ -363,7 +396,9 @@
       ? '你可以随时停止共享；网页版不会远程操作键鼠或打开文件。'
       : state.controlEnabled
         ? isMobileDevice()
-          ? '触屏控制：单指拖动移动鼠标，轻点画面点击。'
+          ? state.inputMode === 'mouse'
+            ? '虚拟鼠标：在触控板拖动移动，轻点触控板点击。'
+            : '触屏控制：单指拖动移动鼠标，轻点画面点击。'
           : '远程控制已启用：鼠标移入画面即可同步，点击可操作。'
         : '移动指针即可让对方看到位置；点击画面可发送强调提示。';
     $('permissionNote').innerHTML = state.mode === 'host'
@@ -500,7 +535,8 @@
     state.autoShareAttempted = false;
     state.remoteMobile = false;
     state.androidFallback = 0;
-    state.androidDegradeSent = false;
+    state.androidDegradeLevel = 0;
+    state.lowFpsSeconds = 0;
     state.phase = 'connecting';
     const binding = bindingForRole(state.mode);
     $('displayCode').textContent = binding ? '已绑定设备' : formatCode(state.room);
@@ -713,10 +749,10 @@
         break;
       case 'android-degrade':
         if (state.mode === 'host' && state.remoteMobile) {
-          state.androidFallback = 1;
+          state.androidFallback = Math.max(1, Math.min(2, Number(message.level) || 1));
           applyEncodingQuality();
           render();
-          toast('Android 高画质解码不稳定，已自动降至 1080p', 'error');
+          toast(state.androidFallback === 2 ? 'Android 已切换 720p 流畅模式' : 'Android 高画质解码不稳定，已自动降至 1080p', 'error');
         }
         break;
       case 'media-settings':
@@ -974,7 +1010,8 @@
     if (!state.peerConnection || state.webrtcActive) return;
     state.webrtcActive = true;
     state.androidFallback = 0;
-    state.androidDegradeSent = false;
+    state.androidDegradeLevel = 0;
+    state.lowFpsSeconds = 0;
     state.webrtcRtt = null;
     state.usingTurn = false;
     state.lastStatsBytes = 0;
@@ -1049,13 +1086,7 @@
         if (isMobileDevice()) {
           event.track.onmute = () => {
             setTimeout(() => {
-              if (!event.track.muted || !state.webrtcActive) return;
-              if (!state.androidDegradeSent) {
-                state.androidDegradeSent = true;
-                sendJson({ type: 'android-degrade' });
-              } else {
-                fallbackFromWebRTC(true);
-              }
+              if (event.track.muted && state.webrtcActive) requestAndroidDegrade();
             }, 2500);
           };
           event.track.onended = () => fallbackFromWebRTC(true);
@@ -1169,7 +1200,11 @@
       let fps = state.fps;
       if (state.remoteMobile) {
         const settings = sender.track.getSettings();
-        const mobile = state.androidFallback ? mobileFallbackProfiles[state.quality] : mobileProfiles[state.quality];
+        const mobile = state.androidFallback === 2
+          ? mobileStableProfiles[state.quality]
+          : state.androidFallback === 1
+            ? mobileFallbackProfiles[state.quality]
+            : mobileProfiles[state.quality];
         scale = Math.max(scale, Math.ceil((settings.width || 1920) / mobile.width), Math.ceil((settings.height || 1080) / mobile.height));
         bitrate = Math.min(bitrate, mobile.bitrate);
         fps = Math.min(fps, mobile.fps);
@@ -1385,7 +1420,7 @@
   }
 
   function queuePointer(event, click = false) {
-    if (state.mode !== 'controller' || !state.pointerEnabled || !state.pointerAllowed || !state.hasFrame) return;
+    if (state.mode !== 'controller' || !state.pointerEnabled || !state.pointerAllowed || !state.hasFrame || state.inputMode === 'mouse') return;
     const surface = state.webrtcActive ? $('remoteVideo') : $('remoteCanvas');
     const width = state.webrtcActive ? surface.videoWidth : surface.width;
     const height = state.webrtcActive ? surface.videoHeight : surface.height;
@@ -1507,6 +1542,10 @@
     render();
     toast(state.controlEnabled ? '远程控制已启用' : '已切换为仅标注模式', state.controlEnabled ? 'success' : '');
   });
+  $('inputModeButton').addEventListener('click', () => {
+    state.inputMode = state.inputMode === 'touch' ? 'mouse' : 'touch';
+    render();
+  });
   function sendMediaSettings() {
     state.quality = $('qualitySelect').value;
     state.fps = Number($('fpsSelect').value);
@@ -1549,6 +1588,39 @@
   };
   bindRemoteInput($('remoteCanvas'));
   bindRemoteInput($('remoteVideo'));
+
+  let trackpadLast = null;
+  let trackpadStart = null;
+  let trackpadMoved = false;
+  $('trackpadSurface').addEventListener('pointerdown', (event) => {
+    if (!state.controlEnabled || state.inputMode !== 'mouse') return;
+    event.preventDefault();
+    $('trackpadSurface').setPointerCapture(event.pointerId);
+    trackpadLast = { x: event.clientX, y: event.clientY };
+    trackpadStart = { ...trackpadLast };
+    trackpadMoved = false;
+  });
+  $('trackpadSurface').addEventListener('pointermove', (event) => {
+    if (!trackpadLast || !state.controlEnabled || state.inputMode !== 'mouse') return;
+    const dx = event.clientX - trackpadLast.x;
+    const dy = event.clientY - trackpadLast.y;
+    const rect = $('trackpadSurface').getBoundingClientRect();
+    if (Math.hypot(event.clientX - trackpadStart.x, event.clientY - trackpadStart.y) > 4) trackpadMoved = true;
+    state.virtualPosition.x = Math.max(0, Math.min(1, state.virtualPosition.x + dx / rect.width * 1.8));
+    state.virtualPosition.y = Math.max(0, Math.min(1, state.virtualPosition.y + dy / rect.height * 1.8));
+    trackpadLast = { x: event.clientX, y: event.clientY };
+    sendControl({ action: 'mousemove', x: state.virtualPosition.x, y: state.virtualPosition.y });
+  });
+  const endTrackpad = (event) => {
+    if (!trackpadLast) return;
+    if (!trackpadMoved) sendControl({ action: 'click', button: 0 });
+    trackpadLast = null;
+    trackpadStart = null;
+    trackpadMoved = false;
+    if ($('trackpadSurface').hasPointerCapture(event.pointerId)) $('trackpadSurface').releasePointerCapture(event.pointerId);
+  };
+  $('trackpadSurface').addEventListener('pointerup', endTrackpad);
+  $('trackpadSurface').addEventListener('pointercancel', endTrackpad);
 
   $('openBindingButton').addEventListener('click', async () => {
     await registerDevice();
