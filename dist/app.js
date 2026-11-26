@@ -33,6 +33,8 @@
     peerName: '',
     device: null,
     bindings: [],
+    boundSession: false,
+    autoShareAttempted: false,
     transport: { connected: false, pollController: null, frameController: null, frameVersion: 0, controlVersion: 0, frameLoopRunning: false },
     intentionalClose: false,
     approved: false,
@@ -484,6 +486,8 @@
 
   async function connectRelay() {
     state.intentionalClose = false;
+    state.boundSession = Boolean(bindingForRole(state.mode));
+    state.autoShareAttempted = false;
     state.remoteMobile = false;
     state.androidFallback = 0;
     state.androidDegradeSent = false;
@@ -642,6 +646,11 @@
           sendJson({ type: 'media-settings', quality: state.quality, fps: state.fps, mobile: isMobileDevice() });
           ensureWebRTC();
           startFrameLoop();
+        } else if (state.boundSession && window.lianqiaoNative?.applyControl && !state.autoShareAttempted) {
+          state.autoShareAttempted = true;
+          setTimeout(startCapture, 0);
+        } else if (state.boundSession) {
+          toast('受信任设备已自动连接，请点击“开始共享”', 'success');
         }
         toast('连接成功', 'success');
         break;
@@ -746,6 +755,8 @@
     stopCapture(false);
     clearTimers();
     state.approved = false;
+    state.boundSession = false;
+    state.autoShareAttempted = false;
     state.hasFrame = false;
     state.phase = 'error';
     state.room = '';
@@ -772,6 +783,8 @@
     stopCapture(false);
     clearTimers();
     state.approved = false;
+    state.boundSession = false;
+    state.autoShareAttempted = false;
     state.hasFrame = false;
     state.phase = 'idle';
     state.room = '';
