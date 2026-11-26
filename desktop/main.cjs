@@ -4,6 +4,7 @@ const path = require('node:path');
 const siteUrl = 'https://lianqiao-assist-2xoqymkdrbe.qoder.zone';
 let mainWindow;
 let nut;
+let controlGranted = false;
 let controlQueue = Promise.resolve();
 
 async function getNut() {
@@ -126,7 +127,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  ipcMain.handle('lianqiao:set-control-permission', (_event, allowed) => {
+    controlGranted = Boolean(allowed);
+    return controlGranted;
+  });
+
   ipcMain.handle('lianqiao:apply-control', (_event, payload) => {
+    if (!controlGranted) return false;
     controlQueue = controlQueue.then(() => applyControl(payload)).catch(() => false);
     return controlQueue;
   });
@@ -138,6 +145,7 @@ app.whenReady().then(() => {
   });
 
   globalShortcut.register('Ctrl+Alt+Shift+L', () => {
+    controlGranted = false;
     mainWindow?.webContents.send('lianqiao:emergency-stop');
   });
 
