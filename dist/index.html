@@ -126,17 +126,18 @@
             <div class="media-shell" id="mediaShell">
               <video id="hostVideo" class="media-element" autoplay muted playsinline hidden></video>
               <canvas id="hostCanvas" class="media-element" hidden></canvas>
-              <video id="remoteVideo" class="media-element" autoplay muted playsinline hidden></video>
-              <canvas id="remoteCanvas" class="media-element" hidden></canvas>
+              <video id="remoteVideo" class="media-element" autoplay muted playsinline tabindex="0" hidden></video>
+              <canvas id="remoteCanvas" class="media-element" tabindex="0" hidden></canvas>
               <div class="media-placeholder" id="mediaPlaceholder"><svg><use href="#i-monitor"></use></svg><span>共享尚未开始</span><div class="placeholder-actions"><button class="primary-button start-share-button" id="startSharingButton" type="button"><svg><use href="#i-monitor"></use></svg>开始共享</button><button class="secondary-button test-pattern-button" id="testPatternButton" type="button">发送测试画面</button></div></div>
               <div class="media-top-badge"><span class="status-dot live"></span><span id="mediaBadgeText">等待共享画面</span></div>
               <div class="media-stats" id="mediaStats">0 fps · 0 KB/s</div>
               <div class="remote-pointer" id="remotePointer" hidden><svg><use href="#i-pointer"></use></svg><span>协助者</span></div>
               <div class="controller-toolbar" id="controllerToolbar" hidden>
                 <button class="tool-button active" id="pointerButton" type="button" aria-pressed="true"><svg><use href="#i-pointer"></use></svg><span>指针</span></button>
+                <button class="tool-button" id="controlButton" type="button" aria-pressed="false" disabled><svg><use href="#i-monitor"></use></svg><span>控制</span></button>
                 <button class="tool-button" id="fullscreenButton" type="button"><svg><use href="#i-fullscreen"></use></svg><span>全屏</span></button>
-                <label class="quality-select"><svg><use href="#i-sliders"></use></svg><select id="qualitySelect" aria-label="画面质量"><option value="original">原画</option><option value="high">高清</option><option value="balanced">均衡</option><option value="low">省流</option></select></label>
-                <label class="quality-select"><svg><use href="#i-refresh"></use></svg><select id="fpsSelect" aria-label="画面帧率"><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option></select></label>
+                <label class="quality-select"><svg><use href="#i-sliders"></use></svg><select id="qualitySelect" aria-label="画面质量"><option value="uhd">4K 原画</option><option value="original">原画</option><option value="high">高清</option><option value="balanced">均衡</option><option value="low">省流</option></select></label>
+                <label class="quality-select"><svg><use href="#i-refresh"></use></svg><select id="fpsSelect" aria-label="画面帧率"><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option><option value="120">120 fps</option></select></label>
                 <button class="tool-button danger-tool" id="disconnectButton" type="button"><svg><use href="#i-stop"></use></svg><span>结束</span></button>
               </div>
               <button class="stop-sharing-button" id="stopSharingButton" type="button" hidden><svg><use href="#i-stop"></use></svg>结束共享</button>
@@ -159,6 +160,7 @@
           <div class="panel-heading"><h2>共享权限</h2><svg class="muted-icon"><use href="#i-sliders"></use></svg></div>
           <label class="toggle-row"><span><strong>远程指针</strong><small>让对方在画面上指出位置</small></span><input type="checkbox" id="pointerPermission" checked /><i></i></label>
           <label class="toggle-row"><span><strong>会话聊天</strong><small>在会话中发送文字消息</small></span><input type="checkbox" id="chatPermission" checked /><i></i></label>
+          <label class="toggle-row"><span><strong>远程键鼠控制</strong><small>仅 Windows 原生被控端可用</small></span><input type="checkbox" id="controlPermission" /><i></i></label>
           <p class="permission-note" id="permissionNote"><svg><use href="#i-info"></use></svg>网页版不会远程操作键鼠或打开文件。</p>
         </section>
 
