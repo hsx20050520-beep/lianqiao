@@ -526,7 +526,8 @@ async function handleSend(supabase, storage, room, role, message) {
     }
     case 'android-degrade': {
       if (role !== 'controller' || !room.approved) return json({ error: 'not_allowed' }, 403);
-      await enqueue(supabase, room.code, 'host', { type: 'android-degrade' });
+      const level = Math.max(1, Math.min(2, Number(message.level) || 1));
+      await enqueue(supabase, room.code, 'host', { type: 'android-degrade', level });
       return json({ ok: true }, 202);
     }
     case 'media-settings': {
