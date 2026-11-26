@@ -1626,5 +1626,7 @@
 
   render();
   checkRelayHealth();
-  registerDevice();
+  registerDevice().then(() => {
+    if (window.lianqiaoNative?.applyControl && state.mode === 'host' && bindingForRole('host') && state.phase === 'idle') connectRelay();
+  });
 })();
