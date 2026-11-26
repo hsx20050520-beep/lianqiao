@@ -147,6 +147,57 @@ async function loadBinding(supabase, bindingId) {
   return data;
 }
 
+async function ensureBoundRoom(supabase, binding) {
+  const previousCode = binding.active_room_code || null;
+  if (previousCode && !codePattern.test(previousCode)) throw new Error('database_request_failed');
+  if (previousCode) {
+    const existing = await getRoom(supabase, previousCode);
+    if (existing && !existing.closed) return previousCode;
+  }
+
+  const now = new Date().toISOString();
+  let roomCode = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    roomCode = randomCode();
+    const { error } = await supabase.from('relay_rooms').insert({
+      code: roomCode,
+      host_name: safeName(binding.host_name, '被协助端'),
+      approved: false,
+      pointer_allowed: true,
+      chat_allowed: true,
+      control_allowed: false,
+      frame_version: 0,
+      created_at: now,
+      updated_at: now,
+      closed: false,
+    });
+    if (!error) break;
+    if (error.code !== '23505') throw new Error('database_request_failed');
+    roomCode = '';
+  }
+  if (!roomCode) throw new Error('code_conflict');
+
+  let update = supabase.from('device_bindings')
+    .update({ active_room_code: roomCode })
+    .eq('id', binding.id)
+    .is('revoked_at', null);
+  update = previousCode ? update.eq('active_room_code', previousCode) : update.is('active_room_code', null);
+  const { data: updated, error } = await update.select('id').maybeSingle();
+  if (error) throw new Error('database_request_failed');
+  if (!updated) {
+    const latest = await loadBinding(supabase, binding.id);
+    if (latest?.active_room_code) {
+      const room = await getRoom(supabase, latest.active_room_code);
+      if (room && !room.closed) return latest.active_room_code;
+    }
+    try {
+      await supabase.from('relay_rooms').update({ closed: true, updated_at: new Date().toISOString() }).eq('code', roomCode);
+    } catch {}
+    throw new Error('binding_conflict');
+  }
+  return roomCode;
+}
+
 function deviceErrorResponse(error) {
   const message = error instanceof Error ? error.message : '';
   if (message === 'body_too_large') return json({ error: 'body_too_large' }, 413);
@@ -274,47 +325,7 @@ async function handleDevice(request, supabase) {
       const binding = await loadBinding(supabase, body.bindingId);
       if (!binding || binding.revoked_at) return json({ error: 'binding_not_found' }, 404);
       if (binding.host_device_id !== device.id) return json({ error: 'not_allowed' }, 403);
-      const previousCode = binding.active_room_code || null;
-      if (previousCode && !codePattern.test(previousCode)) throw new Error('database_request_failed');
-      if (previousCode) {
-        const room = await getRoom(supabase, previousCode);
-        if (room && !room.closed) return json({ ok: true, room: previousCode });
-      }
-      const now = new Date().toISOString();
-      let roomCode = '';
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        roomCode = randomCode();
-        const { error } = await supabase.from('relay_rooms').insert({
-          code: roomCode,
-          host_name: safeName(binding.host_name, '被协助端'),
-          approved: false,
-          pointer_allowed: true,
-          chat_allowed: true,
-          control_allowed: false,
-          frame_version: 0,
-          created_at: now,
-          updated_at: now,
-          closed: false,
-        });
-        if (!error) break;
-        if (error.code !== '23505') throw new Error('database_request_failed');
-        roomCode = '';
-      }
-      if (!roomCode) throw new Error('code_conflict');
-      let update = supabase.from('device_bindings')
-        .update({ active_room_code: roomCode })
-        .eq('id', binding.id)
-        .eq('host_device_id', device.id)
-        .is('revoked_at', null);
-      update = previousCode ? update.eq('active_room_code', previousCode) : update.is('active_room_code', null);
-      const { data: updated, error } = await update.select('id').maybeSingle();
-      if (error) throw new Error('database_request_failed');
-      if (!updated) {
-        try {
-          await supabase.from('relay_rooms').update({ closed: true, updated_at: new Date().toISOString() }).eq('code', roomCode);
-        } catch {}
-        throw new Error('binding_conflict');
-      }
+      const roomCode = await ensureBoundRoom(supabase, binding);
       return json({ ok: true, room: roomCode });
     }
 
@@ -324,9 +335,7 @@ async function handleDevice(request, supabase) {
       const binding = await loadBinding(supabase, body.bindingId);
       if (!binding || binding.revoked_at) return json({ error: 'binding_not_found' }, 404);
       if (binding.controller_device_id !== device.id) return json({ error: 'not_allowed' }, 403);
-      const code = binding.active_room_code;
-      if (!code) return json({ error: 'session_not_found' }, 404);
-      if (!codePattern.test(code)) throw new Error('database_request_failed');
+      const code = await ensureBoundRoom(supabase, binding);
       const room = await getRoom(supabase, code);
       if (!room) return json({ error: 'session_not_found' }, 404);
       if (room.closed) return json({ error: 'session_closed' }, 410);
