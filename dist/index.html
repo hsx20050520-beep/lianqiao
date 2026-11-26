@@ -135,11 +135,13 @@
               <div class="controller-toolbar" id="controllerToolbar" hidden>
                 <button class="tool-button active" id="pointerButton" type="button" aria-pressed="true"><svg><use href="#i-pointer"></use></svg><span>指针</span></button>
                 <button class="tool-button" id="controlButton" type="button" aria-pressed="false" disabled><svg><use href="#i-monitor"></use></svg><span>控制</span></button>
+                <button class="tool-button" id="inputModeButton" type="button" aria-pressed="false" disabled><svg><use href="#i-pointer"></use></svg><span>触控</span></button>
                 <button class="tool-button" id="fullscreenButton" type="button"><svg><use href="#i-fullscreen"></use></svg><span>全屏</span></button>
                 <label class="quality-select"><svg><use href="#i-sliders"></use></svg><select id="qualitySelect" aria-label="画面质量"><option value="uhd">4K 原画</option><option value="original">原画</option><option value="high">高清</option><option value="balanced">均衡</option><option value="low">省流</option></select></label>
                 <label class="quality-select"><svg><use href="#i-refresh"></use></svg><select id="fpsSelect" aria-label="画面帧率"><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option><option value="120">120 fps</option></select></label>
                 <button class="tool-button danger-tool" id="disconnectButton" type="button"><svg><use href="#i-stop"></use></svg><span>结束</span></button>
               </div>
+              <div class="virtual-trackpad" id="virtualTrackpad" hidden><div class="trackpad-surface" id="trackpadSurface"><span>拖动移动 · 轻点点击</span></div></div>
               <button class="stop-sharing-button" id="stopSharingButton" type="button" hidden><svg><use href="#i-stop"></use></svg>结束共享</button>
             </div>
             <div class="active-bottom-bar"><div class="active-peer"><span class="peer-avatar" id="peerAvatar">协</span><div><strong id="activePeerName">协助者</strong><span id="activePeerDetail">已连接</span></div></div><div class="active-time"><span>会话时长</span><strong id="sessionTimer">00:00</strong></div></div>
