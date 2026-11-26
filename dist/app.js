@@ -403,7 +403,15 @@
       body: JSON.stringify({ op, deviceId: state.device.id, secret: state.device.secret, ...payload }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || '设备服务暂时不可用');
+    if (!response.ok) {
+      const messages = {
+        invalid_pair_code: '绑定码无效或已过期，请重新生成',
+        binding_exists: '这台设备已经绑定，请刷新页面后查看',
+        invalid_credentials: '设备凭证已变化，请重新绑定',
+        session_not_found: '绑定会话不存在，请重新创建',
+      };
+      throw new Error(messages[data.error] || '设备服务暂时不可用');
+    }
     return data;
   }
 
@@ -1562,11 +1570,14 @@
   $('copyBindCodeButton').addEventListener('click', () => copyText($('bindCodeText').textContent.replace('-', ''), '绑定码已复制'));
   $('redeemBindCode').addEventListener('input', () => { $('redeemBindCode').value = formatCode($('redeemBindCode').value); });
   $('redeemBindCodeButton').addEventListener('click', async () => {
+    const button = $('redeemBindCodeButton');
     const code = normalizeCode($('redeemBindCode').value);
     if (code.length !== 8) {
       toast('请输入完整的 8 位绑定码', 'error');
       return;
     }
+    button.disabled = true;
+    button.textContent = '绑定中…';
     try {
       await deviceRequest('bind-redeem', { code, name: state.device.name });
       $('redeemBindCode').value = '';
@@ -1574,6 +1585,9 @@
       toast('设备绑定成功', 'success');
     } catch (error) {
       toast(error instanceof Error ? error.message : '绑定失败', 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = '绑定这台设备';
     }
   });
 
